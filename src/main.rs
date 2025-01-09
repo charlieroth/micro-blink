@@ -3,7 +3,15 @@
 
 use cortex_m::asm::nop;
 use cortex_m_rt::entry;
-use nrf52833_pac::Peripherals;
+use embedded_hal::digital::{OutputPin, PinState};
+use hal::gpio::Level;
+use nrf52833_hal::{
+    self as hal,
+    gpio::{
+        p0::{P0_21, P0_28},
+        Output, PushPull,
+    },
+};
 use panic_halt as _;
 use rtt_target::{rprintln, rtt_init_print};
 extern crate cortex_m;
@@ -13,17 +21,16 @@ fn main() -> ! {
     rtt_init_print!();
     rprintln!("Starting...");
 
-    let p = Peripherals::take().unwrap();
-    // write to `PIN_CNF[21]`, pin direction as output
-    p.P0.pin_cnf[21].write(|w| w.dir().output());
-    // write to `PIN_CNF[28]`, pin direction as output
-    p.P0.pin_cnf[28].write(|w| w.dir().output());
+    let p = hal::pac::Peripherals::take().unwrap();
+    let port0 = hal::gpio::p0::Parts::new(p.P0); // Get `P0`, 0x5000_0000
+    let _col1: P0_28<Output<PushPull>> = port0.p0_28.into_push_pull_output(Level::Low); // Ground `PIN_CNF[28]`
+    let mut row1: P0_21<Output<PushPull>> = port0.p0_21.into_push_pull_output(Level::Low); // Ground `PIN_CNF[28]`, make mutable
 
+    // blinking loop
     let mut is_on: bool = false;
     loop {
-        // write to `OUT`, write bit `is_on` to Bit/Pin 21
-        p.P0.out.write(|w| w.pin21().bit(is_on));
-        for _ in 0..200_000 {
+        let _ = row1.set_state(PinState::from(is_on));
+        for _ in 0..400_000 {
             nop();
         }
         is_on = !is_on;
